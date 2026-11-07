@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 
@@ -14,6 +13,14 @@ BarWidget {
   // (empty object first), so an empty settings object correctly reads as
   // hidden rather than unknown.
   readonly property bool showBarTemp: root.settings && root.settings["showBarTemp"] === true
+
+  readonly property string barTempLabel: {
+    if (!root.showBarTemp) return ""
+    var unit = panelLoader.item ? panelLoader.item.barTempUnit : "°F"
+    if (panelLoader.item && panelLoader.item.barTemperature !== "")
+      return panelLoader.item.barTemperature + unit
+    return "…" + unit
+  }
 
   function syncService() {
     if (root.radar && "settings" in root.radar) root.radar.settings = root.settings
@@ -63,8 +70,8 @@ BarWidget {
   visible: true
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
-  readonly property real openPanelIndicatorWidth: weatherContent.implicitWidth
-  readonly property real openPanelIndicatorHeight: weatherContent.implicitHeight
+  readonly property real openPanelIndicatorWidth: Math.max(button.glyphPaintedWidth, Style.bar.iconSize)
+  readonly property real openPanelIndicatorHeight: Math.max(button.glyphPaintedHeight, Style.bar.iconSize)
 
   onBarChanged: injectPanel()
   onSettingsChanged: { injectPanel(); syncService() }
@@ -84,55 +91,37 @@ BarWidget {
     }
   }
 
-  WidgetButton {
+  BarIconButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    labelVisible: false
-    hasVisualContent: true
-    fixedWidth: root.vertical ? -1 : weatherContent.implicitWidth + Style.space(12)
-    fixedHeight: root.vertical ? weatherContent.implicitHeight + Style.space(8) : -1
+    text: panelLoader.item ? panelLoader.item.barConditionGlyph : ""
+    labelText: root.vertical ? "" : root.barTempLabel
+    slotSize: Style.bar.statusSlot
+    // Match the clock's body text size for the temperature label while the
+    // glyph is optically painted at Style.bar.iconSize, like other bar icons.
+    fontSize: root.barTempLabel !== "" && !root.vertical ? Style.font.body : Style.bar.iconFont
+    // Keep BarIconButton's slot sizing; widen only for the temperature label.
+    fixedWidth: !root.vertical && root.barTempLabel !== ""
+      ? button.slotSize + tempMeasure.implicitWidth + Style.space(10)
+      : (root.vertical ? -1 : button.slotSize)
+    fixedHeight: root.vertical ? button.slotSize : -1
     tooltipText: "Weather — click forecast, middle refresh, right notify"
+
+    Text {
+      id: tempMeasure
+      visible: false
+      textFormat: Text.PlainText
+      text: root.barTempLabel
+      font.family: button.fontFamily
+      font.pixelSize: Style.font.body
+    }
 
     onPressed: function(b) {
       if (b === Qt.RightButton) {
         if (panelLoader.item && panelLoader.item.notifyCurrent) panelLoader.item.notifyCurrent()
       } else if (b === Qt.MiddleButton) root.refresh()
       else root.togglePanel()
-    }
-
-    GridLayout {
-      id: weatherContent
-      anchors.centerIn: parent
-      columns: root.vertical ? 1 : 2
-      rowSpacing: Style.space(1)
-      columnSpacing: Style.space(3)
-
-      Text {
-        Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-        textFormat: Text.PlainText
-        visible: root.showBarTemp
-        text: {
-          var unit = panelLoader.item ? panelLoader.item.barTempUnit : "°F"
-          if (panelLoader.item && panelLoader.item.barTemperature !== "")
-            return panelLoader.item.barTemperature + unit
-          return "…" + unit
-        }
-        color: button.foreground
-        font.family: button.fontFamily
-        font.pixelSize: Style.font.bodySmall
-        font.weight: Font.DemiBold
-      }
-
-      Text {
-        Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-        visible: text !== ""
-        textFormat: Text.PlainText
-        text: panelLoader.item ? panelLoader.item.barConditionGlyph : ""
-        color: button.foreground
-        font.family: button.fontFamily
-        font.pixelSize: Style.font.caption
-      }
     }
   }
 }
